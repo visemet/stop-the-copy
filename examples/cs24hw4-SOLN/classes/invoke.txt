@@ -1,0 +1,5 @@
+movl 8(%ebp), %ecx # %ecx = object-pointer
+movl (%ecx), %edx # %edx = pointer to class info
+movl (%edx), %edx # %edx = getVolume() func-ptr
+pushl %ecx # Push this as arg to getVolume()
+call *%edx # Make the indirect call!
