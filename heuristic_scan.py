@@ -90,12 +90,18 @@ def go(folder, tag, files_to_scan):
         f1 = user_contents[user1][filename]
         if f1 == None:
           continue
+          
+        if user1 not in diff_results[filename].keys():
+          diff_results[filename][user1] = {}
 
         for j in range(i+1, len(usernames)):
           user2 = usernames[j]
           f2 = user_contents[user2][filename]
           if f2 == None:
             continue
+            
+          if user2 not in diff_results[filename].keys():
+            diff_results[filename][user2] = {}
 
           ratio, diff = run_diff(f1, f2)
           total_ratio += ratio
@@ -103,12 +109,17 @@ def go(folder, tag, files_to_scan):
 
           # Store the results in a global map and as a list that is will be
           # sorted and printed
-          diff_results[filename][(user1, user2)] = (ratio, diff)
-          sorted_results.append((ratio, user1, user2))
+          diff_results[filename][user1][user2] = (ratio, diff)
           
           # Store the inverse as well, for bookkeeping purposes
-          ratio, diff = run_diff(f2, f1)
-          diff_results[filename][(user2, user1)] = (ratio, diff)
+          ratio_inv, diff_inv = run_diff(f2, f1)
+          diff_results[filename][user2][user1] = (ratio, diff)
+          
+          # Oddly, this isn't commutative?
+          if (ratio > ratio_inv):
+            sorted_results.append((ratio, user1, user2))
+          else:
+            sorted_results.append((ratio_inv, user2, user1))
 
       
       diffsquared = 0.
@@ -137,10 +148,42 @@ def print_u2u(results, user1, user2, filename=None):
     files = filename
     
   for filename in files:
-    ratio, diff = results[filename][(user1, user2)]
+    ratio, diff = results[filename][user1][user2]
     print "[", user1, "]", '[', user2, "] :", filename, ratio
     print diff
     print "\n\n"
+    
+# Outputs the filenames we scanned to CSV format... jankily
+def output_to_csv(results, filename=None):
+  if filename == None:
+    files = results.keys()
+  elif type(filename) is not ListType:
+    files = [filename]
+  else:
+    files = filename
+    
+  for filename in files:
+    values = results[filename]
+    output = open(filename.split('/')[-1]+".csv", 'w')
+    users = values.keys()
+    
+    # Print the top header of the csv
+    output.write(filename+",")
+    for user in users:
+      output.write(user+",")
+    output.write('\n')
+    
+    # Print the rest of the csv
+    for user1 in users:
+      output.write(user1+",")
+      for user2 in users:
+        if user1 == user2:
+          output.write("-,")
+        else:
+          output.write(str(values[user1][user2][0])+",")
+      output.write('\n')
+    
+    output.close()
 
 ##################################
 ######## MAIN
@@ -156,5 +199,6 @@ else:
   files_to_scan = sys.argv[3:]
 
   results = go(folder, tag, files_to_scan)
+  #output_to_csv(results)
 
 
