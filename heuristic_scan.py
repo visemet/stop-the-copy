@@ -178,7 +178,7 @@ def output_to_csv(results, filename=None):
       output.write(user1+",")
       for user2 in users:
         if user1 == user2:
-          output.write("-,")
+          output.write("1,")
         else:
           output.write(str(values[user1][user2][0])+",")
       output.write('\n')
@@ -199,6 +199,6 @@ else:
   files_to_scan = sys.argv[3:]
 
   results = go(folder, tag, files_to_scan)
-  #output_to_csv(results)
+  output_to_csv(results)
 
 
