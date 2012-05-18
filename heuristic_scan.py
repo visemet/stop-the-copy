@@ -24,12 +24,36 @@ def strip_file(filename):
   
   return lines
 
-# Returns the strict ratio as defined by the sequence matcher
-def strict_ratio(f1, f2):
-  seq = SequenceMatcher(None, f1, f2)
-  ratio = seq.ratio()
-  
-  return ratio
+# Computes a ratio for each file, then deletes the matching blocks, and
+# recomputes the ratio with the truncated lines
+def strict_ratio(_f1, _f2, num_itrs = 1):
+  f1 = _f1[:]
+  f2 = _f2[:]
+
+  accum = 0
+  tot_len = len(f1) + len(f2)
+
+  for durrrhurrrr in range(num_itrs):
+    seq = SequenceMatcher(None, f1, f2)
+    ratio = seq.ratio()
+
+    # The weight is given by the number of lines matching
+    accum += ratio*(len(f1) + len(f2))
+
+    # Splice out the matched blocks, and re-run
+    blocks = seq.get_matching_blocks()
+    if len(blocks) == 0:
+      break
+
+    for i in sorted(range(len(blocks)), reverse=True):
+      f1_start = blocks[i][0]
+      f2_start = blocks[i][1]
+      run_len  = blocks[i][2]
+
+      del f1[f1_start:f1_start + run_len]
+      del f2[f2_start:f2_start + run_len]
+
+  return accum/tot_len
 
 # Returns the fuzzy ratio that does not count ? mark lines
 def loose_ratio(diff, f1, f2):
@@ -64,7 +88,7 @@ def differ(f1, f2):
   return diff
 
 # Does the magic
-def go(folder, tag, files_to_scan, loose=False):
+def go(folder, tag, files_to_scan, loose=False, itr=False):
   tag=tag+"-"
   
   # Get the current path, try to find the directory we want
@@ -140,7 +164,7 @@ def go(folder, tag, files_to_scan, loose=False):
           if loose:
             ratio = loose_ratio(diff, f1, f2)
           else:
-            ratio = strict_ratio(f1, f2)
+            ratio = strict_ratio(f1, f2, 20 if itr else 1)
           diff_results[filename][user1][user2] = (ratio, diff)
           
           # Store the inverse as well, for bookkeeping purposes
@@ -148,7 +172,7 @@ def go(folder, tag, files_to_scan, loose=False):
           if loose:
             ratio_inv = loose_ratio(diff_inv, f2, f1);
           else:
-            ratio_inv = strict_ratio(f2, f1)
+            ratio_inv = strict_ratio(f2, f1, 20 if itr else 1)
           diff_results[filename][user2][user1] = (ratio_inv, diff_inv)
           
           # Oddly, this isn't commutative?
@@ -248,5 +272,7 @@ else:
   tag = sys.argv[2]
   files = sys.argv[3:]
 
-  results = go(folder, tag, files, loose=False)
+  # loose sets 'fuzzy' matching
+  # itr   sets iterative matching TODO: loose iterative
+  results = go(folder, tag, files, loose=False, itr=False)
 
