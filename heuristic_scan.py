@@ -252,7 +252,7 @@ def output_to_csv(filename=None, results=None):
       output.write(user1+",")
       for user2 in users:
         if user1 == user2:
-          output.write("-,")
+          output.write("1,")
         else:
           output.write(str(values[user1][user2][0])+",")
       output.write('\n')
