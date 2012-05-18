@@ -2,6 +2,8 @@ from difflib import *
 from types import *
 import sys, os, string, subprocess, math
 
+latest_results = None
+
 # Strips a file of its comments and whitespace, then returns the lines
 def strip_file(filename):
   command="remccoms3.sed " + filename + " | remspace.py"
@@ -21,21 +23,48 @@ def strip_file(filename):
   lines = out.splitlines(1)
   
   return lines
-  
-# Runs a diff on the two inputs and returns the ratio of similarity along
-# with a joined diff
-def run_diff(f1, f2):
-  d = Differ()
-  diff = d.compare(f1, f2)
-  diff = ''.join(diff)
 
+# Returns the strict ratio as defined by the sequence matcher
+def strict_ratio(f1, f2):
   seq = SequenceMatcher(None, f1, f2)
   ratio = seq.ratio()
   
-  return (ratio, diff)
+  return ratio
+
+# Returns the fuzzy ratio that does not count ? mark lines
+def loose_ratio(diff, f1, f2):
+  diff_count = 0.
+  for i in range(len(diff)):
+    line = diff[i]
+    if line[0] == '+' or line[0] == '-':
+      diff_count += 1.
+    elif line[0] == '?':
+      # Find the weight of the change based on the # of character changes
+      # and the length of the original line
+      change_count = line.count('+')    # Count the character changes
+      change_count += line.count('-')
+      change_count += line.count('^')
+      line_size = float(len(diff[i-1])) # Previous line size
+      ratio = change_count/line_size
+
+      diff_count -= 1.*(1. - ratio)
+      # TODO: sometimes a ? comes with both - and + lines, if there is only
+      # one 'direction' of change i.e. a->b only appends or deletes chars
+      # but not both operations, thus we might need to count more when
+      # this happens
+    
+
+  tot_len = len(f1) + len(f2)
+  return (tot_len - diff_count)/tot_len
+
+# Grabs a diff between f1 & f2
+def differ(f1, f2):
+  d = Differ()
+  diff = list(d.compare(f1, f2))
+  return diff
 
 # Does the magic
-def go(folder, tag, files_to_scan):
+def go(folder, tag, files_to_scan, loose=False):
   tag=tag+"-"
   
   # Get the current path, try to find the directory we want
@@ -103,24 +132,32 @@ def go(folder, tag, files_to_scan):
           if user2 not in diff_results[filename].keys():
             diff_results[filename][user2] = {}
 
-          ratio, diff = run_diff(f1, f2)
-          total_ratio += ratio
           num_pairs += 1
 
           # Store the results in a global map and as a list that is will be
           # sorted and printed
+          diff = differ(f1, f2)
+          if loose:
+            ratio = loose_ratio(diff, f1, f2)
+          else:
+            ratio = strict_ratio(f1, f2)
           diff_results[filename][user1][user2] = (ratio, diff)
           
           # Store the inverse as well, for bookkeeping purposes
-          ratio_inv, diff_inv = run_diff(f2, f1)
-          diff_results[filename][user2][user1] = (ratio, diff)
+          diff_inv = differ(f2, f1)
+          if loose:
+            ratio_inv = loose_ratio(diff_inv, f2, f1);
+          else:
+            ratio_inv = strict_ratio(f2, f1)
+          diff_results[filename][user2][user1] = (ratio_inv, diff_inv)
           
           # Oddly, this isn't commutative?
           if (ratio > ratio_inv):
             sorted_results.append((ratio, user1, user2))
+            total_ratio += ratio
           else:
             sorted_results.append((ratio_inv, user2, user1))
-
+            total_ratio += ratio_inv
       
       diffsquared = 0.
       avg_ratio = total_ratio/num_pairs
@@ -136,10 +173,18 @@ def go(folder, tag, files_to_scan):
       print "\t Std dev:", math.sqrt(diffsquared/num_pairs)
       print "\n\n"
 
+  # Set the global and return
+  global latest_results
+  latest_results = diff_results
+
   return diff_results
   
 # Prints some stuff
-def print_u2u(results, user1, user2, filename=None):
+def print_u2u(user1, user2, filename=None, results=None):
+  global latest_results
+  if results == None:
+    results = latest_results
+
   if filename == None:
     files = results.keys()
   elif type(filename) is not ListType:
@@ -149,12 +194,17 @@ def print_u2u(results, user1, user2, filename=None):
     
   for filename in files:
     ratio, diff = results[filename][user1][user2]
+    diff = ''.join(diff)
     print "[", user1, "]", '[', user2, "] :", filename, ratio
     print diff
     print "\n\n"
     
 # Outputs the filenames we scanned to CSV format... jankily
-def output_to_csv(results, filename=None):
+def output_to_csv(filename=None, results=None):
+  global latest_results
+  if results == None:
+    results = latest_results
+
   if filename == None:
     files = results.keys()
   elif type(filename) is not ListType:
@@ -196,9 +246,7 @@ else:
   # TODO: make this not as janky
   folder = sys.argv[1]
   tag = sys.argv[2]
-  files_to_scan = sys.argv[3:]
+  files = sys.argv[3:]
 
-  results = go(folder, tag, files_to_scan)
-  #output_to_csv(results)
-
+  results = go(folder, tag, files, loose=False)
 

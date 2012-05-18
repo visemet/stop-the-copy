@@ -11,6 +11,10 @@
 
 :loop
 
+# Deletes all the {} braces
+s/{//g
+s/}//g
+
 # This one kills off ASM style comments
 s/#.*//
 # This line is sufficient to remove C++ comments! 
