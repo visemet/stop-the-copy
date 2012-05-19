@@ -6,7 +6,7 @@ latest_results = None
 
 # Strips a file of its comments and whitespace, then returns the lines
 def strip_file(filename):
-  command="sed -f remccoms3.sed " + filename + " | remspace.py"
+  command="remccoms3.sed " + filename + " | remspace.py"
   process = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
   out, err = process.communicate()
@@ -52,11 +52,10 @@ def strict_ratio(_f1, _f2, num_itrs = 1):
 
       del f1[f1_start:f1_start + run_len]
       del f2[f2_start:f2_start + run_len]
-
   return accum/tot_len
 
 # Returns the fuzzy ratio that does not count ? mark lines
-def loose_ratio(diff, f1, f2):
+def fuzzy_match(diff, f1, f2):
   diff_count = 0.
   for i in range(len(diff)):
     line = diff[i]
@@ -81,16 +80,79 @@ def loose_ratio(diff, f1, f2):
   tot_len = len(f1) + len(f2)
   return (tot_len - diff_count)/tot_len
 
+# Iterative loosening. Somewhat broken and has bugs mostly due to how
+# ?-ed lines are not represented consistently in the differ library.
+# Sometimes a ?-ed line will have a corresponding + or - line, sometimes
+# it will be one ? line to both + and -. This generally has to do with
+# the ^'s (changes rather than +/-) that crop up, but the position of the
+# lines when it has both + and - are variable too.
+#
+# TLDR: if you see a ratio > 1 on this, then goddamnit. 
+# Also, this is retardedly slow
+def loose_ratio(_f1, _f2, num_itrs=1):
+  f1 = _f1[:]
+  f2 = _f2[:]
+
+  accum = 0
+  tot_len = len(f1) + len(f2)
+  
+  for durrhurr in range(num_itrs):
+    diff = differ(f1, f2)
+    ratio = fuzzy_match(diff, f1, f2)
+    accum += ratio*(len(f1) + len(f2))
+
+    # Splice out the exact matches and fuzzy matches
+    is_fuzzy = False
+    f1_itr = len(f1) - 1
+    f2_itr = len(f2) - 1
+    num_matches = 0
+    for i in sorted(range(len(diff)), reverse=True):
+      line = diff[i]
+      if line[0] == '?':
+        is_fuzzy = True
+        num_matches += 1
+      else:
+        if line[0] == '+':
+          if is_fuzzy:
+            del f2[f2_itr:f2_itr + 1]
+          f2_itr -= 1
+        elif line[0] == '-':
+          if is_fuzzy:
+            del f1[f1_itr:f1_itr + 1]
+          f1_itr -= 1
+        else:
+          del f1[f1_itr:f1_itr + 1]
+          del f2[f2_itr:f2_itr + 1]
+          f1_itr -= 1
+          f2_itr -= 1
+          num_matches += 1
+
+        is_fuzzy = False
+    
+    if f1_itr != -1 or f2_itr != -1:
+      print "Fuzzy iteration mismatch", f1_itr, f2_itr
+      exit()
+
+    # No more matches, or any file is now empty
+    if num_matches == 0 or len(f1) == 0 or len(f2) == 0:
+      break
+
+  return accum/tot_len
+
 # Grabs a diff between f1 & f2
 def differ(f1, f2):
   d = Differ()
+  # TODO: test out ndiff instead of d.compare here
+  #       ndiff has a slightly higher matching criterion i think
   diff = list(d.compare(f1, f2))
   return diff
 
 # Does the magic
 def go(folder, tag, files_to_scan, loose=False, itr=False):
   tag=tag+"-"
-  
+  run_ratio = loose_ratio if loose else strict_ratio
+  num_itrs  = 20 if itr else 1
+
   # Get the current path, try to find the directory we want
   path = os.getcwd()
   filelist = os.listdir(path)
@@ -161,18 +223,12 @@ def go(folder, tag, files_to_scan, loose=False, itr=False):
           # Store the results in a global map and as a list that is will be
           # sorted and printed
           diff = differ(f1, f2)
-          if loose:
-            ratio = loose_ratio(diff, f1, f2)
-          else:
-            ratio = strict_ratio(f1, f2, 20 if itr else 1)
+          ratio = run_ratio(f1, f2, num_itrs)
           diff_results[filename][user1][user2] = (ratio, diff)
           
           # Store the inverse as well, for bookkeeping purposes
           diff_inv = differ(f2, f1)
-          if loose:
-            ratio_inv = loose_ratio(diff_inv, f2, f1);
-          else:
-            ratio_inv = strict_ratio(f2, f1, 20 if itr else 1)
+          ratio_inv = run_ratio(f2, f1, num_itrs)
           diff_results[filename][user2][user1] = (ratio_inv, diff_inv)
           
           # Oddly, this isn't commutative?
@@ -273,6 +329,6 @@ else:
   files = sys.argv[3:]
 
   # loose sets 'fuzzy' matching
-  # itr   sets iterative matching TODO: loose iterative
-  results = go(folder, tag, files, loose=False, itr=False)
+  # itr   sets iterative matching 
+  results = go(folder, tag, files, loose=False, itr=True)
 
