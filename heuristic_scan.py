@@ -6,7 +6,7 @@ latest_results = None
 
 # Strips a file of its comments and whitespace, then returns the lines
 def strip_file(filename):
-  command="sed -f remccoms3.sed " + filename + " | remspace.py"
+  command="sed -nf remccoms3.sed " + filename + " | remspace.py"
   process = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
   out, err = process.communicate()
