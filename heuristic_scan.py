@@ -191,10 +191,15 @@ def go(folder, tag, files_to_scan, loose=False, itr=False):
 
     user_contents[username] = file_contents
 
+  print "-----------------------------------------------------"
+  print "| To jump between files, search for the marker: +++ |"
+  print "| To jump to statistics, search for the marker: === |"
+  print "| Alternately, you can search for the filename      |"
+  print "-----------------------------------------------------"
+  print "\n\n"
   # Compare all the files, printing out the diff results of each comparison
   diff_results = {}
   for filename in files_to_scan:
-      print "Comparing", filename
       total_ratio = 0
       num_pairs = 0
       diff_results[filename] = {}
@@ -239,18 +244,44 @@ def go(folder, tag, files_to_scan, loose=False, itr=False):
             sorted_results.append((ratio_inv, user2, user1))
             total_ratio += ratio_inv
       
-      diffsquared = 0.
-      avg_ratio = total_ratio/num_pairs
       
-      # Print the sorted results and find tally statistics
+      # Sort and tally some results
       sorted_results.sort(reverse = True)
+      max_ratio = sorted_results[0][0]
+      min_ratio = sorted_results[-1][0]
+      avg_ratio = total_ratio/num_pairs
+      dsqr = 0.
+
+      # Prevent div by 0
+      n_min = min_ratio if min_ratio != max_ratio else 0
+      n_range = max_ratio - n_min
+      n_avg = (avg_ratio - n_min)/n_range
+      n_dsqr = 0.
+
+      # Print stuff and collect statistics
+      mode = ("strict" if not loose else "fuzzy") + ("-itr" if itr else "")
+      print "\n{0} results".format(mode)
+      print "+++ {0}:".format(filename)
+      print '\t[{0:8} - {1:8}]  [Norm    |  Actual]'.format("User1", "User2")
       for (ratio, user1, user2) in sorted_results:
-        print "\t[", user1, "]", '[', user2, "] :", ratio
-        diffsquared += (ratio-avg_ratio)**2
+        n_ratio = (ratio - n_min)/n_range
+        print'\t[{0:8} - {1:8}]  [{2:.4f}  |  {3:.4f}]'.format(\
+            user1[:8], user2[:8], n_ratio, ratio)
+
+        dsqr += (ratio-avg_ratio)**2
+        n_dsqr += (n_ratio-n_avg)**2
+
+      std_dev = math.sqrt(dsqr/num_pairs)
+      n_std_dev = math.sqrt(n_dsqr/num_pairs)
 
       # Print some statistics
-      print "\n\tAverage ratio: ", total_ratio/num_pairs
-      print "\t Std dev:", math.sqrt(diffsquared/num_pairs)
+      print "\n{0} stats".format(mode)
+      print "=== {0}:".format(filename)
+      print "\t     [Norm   | Actual]"
+      print "\tAvg: [{0:.4f} | {1:.4f}]\tMax: {2:.4f}".format(\
+          n_avg, avg_ratio, max_ratio)
+      print "\tDev: [{0:.4f} | {1:.4f}]\tMin: {2:.4f} ".format(\
+          n_std_dev, std_dev, min_ratio)
       print "\n\n"
 
   # Set the global and return
