@@ -5,7 +5,7 @@ import sys, os, string, subprocess, math
 latest_results = None
 
 # Strips a file of its comments and whitespace, then returns the lines
-def strip_file(filename):
+def strip_file(filename, reference=None):
   command="sed -nf remccoms3.sed " + filename + " | remspace.py"
   process = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
@@ -16,17 +16,21 @@ def strip_file(filename):
   if err:
     return None
 
-  output=open(filename+".stripped", "w")
-  output.write(out)
-  output.close()
-  
   lines = out.splitlines(1)
+
+  # If we have a reference, strip it out
+  if reference != None:
+    lines = strict_ratio(lines, reference, num_itrs = 5, strip_only = True)[0]
+
+  output=open(filename+".stripped", "w")
+  output.write("".join(lines))
+  output.close()
   
   return lines
 
 # Computes a ratio for each file, then deletes the matching blocks, and
 # recomputes the ratio with the truncated lines
-def strict_ratio(_f1, _f2, num_itrs = 1):
+def strict_ratio(_f1, _f2, num_itrs = 1, strip_only = False):
   f1 = _f1[:]
   f2 = _f2[:]
 
@@ -52,6 +56,10 @@ def strict_ratio(_f1, _f2, num_itrs = 1):
 
       del f1[f1_start:f1_start + run_len]
       del f2[f2_start:f2_start + run_len]
+
+  if strip_only:
+    return (f1, f2)
+
   return accum/tot_len
 
 # Returns the fuzzy ratio that does not count ? mark lines
@@ -148,7 +156,7 @@ def differ(f1, f2):
   return diff
 
 # Does the magic
-def go(folder, tag, files_to_scan, loose=False, itr=False):
+def go(folder, tag, files_to_scan, loose=False, itr=False, use_ref=True):
   tag=tag+"-"
   run_ratio = loose_ratio if loose else strict_ratio
   num_itrs  = 20 if itr else 1
@@ -167,15 +175,30 @@ def go(folder, tag, files_to_scan, loose=False, itr=False):
   path = path+"/"+folder+"/"
   filelist = os.listdir(path)
   usernames = []
+  reference_exists = False
 
   # Look only for files that match the tag, and then grab their usernames
   for filename in filelist:
     if string.find(filename, tag) == 0:
       name_split = string.split(filename, '-')
-      if len(name_split) != 2:
+      if len(name_split) != 2: # TODO: take care of this case
         print filename, "doesn't have exactly one dash!"
       else:
-        usernames.append(name_split[1])
+        if name_split[1] != 'REFERENCE':
+          usernames.append(name_split[1])
+        elif use_ref:
+          reference_exists = True
+
+  # Grab out the reference contents if one exists
+  reference_content = {}
+  if reference_exists:
+    curdir = path+tag+"REFERENCE/"
+    file_contents = {}
+
+    for filename in files_to_scan:
+      curpath = curdir+filename
+      lines = strip_file(curpath)
+      reference_content[filename] = lines
 
   # Now, take each username, and for every file that we want, strip the
   # contents of it and store it somewhere
@@ -186,17 +209,25 @@ def go(folder, tag, files_to_scan, loose=False, itr=False):
 
     for filename in files_to_scan:
       curpath = curdir+filename
-      lines = strip_file(curpath)
+      reference_lines = reference_content[filename] if reference_exists else None
+      lines = strip_file(curpath, reference_lines)
       file_contents[filename] = lines
 
     user_contents[username] = file_contents
 
+  # Output some fancy text
   print "-----------------------------------------------------"
   print "| To jump between files, search for the marker: +++ |"
   print "| To jump to statistics, search for the marker: === |"
   print "| Alternately, you can search for the filename      |"
   print "-----------------------------------------------------"
-  print "\n\n"
+  print "\nChecking files:"
+  for i in range(len(files_to_scan)):
+    ref_tag = "\t [has ref]" if (reference_exists and reference_content[\
+        files_to_scan[i]] != None) else " "
+    print "\t{0}) {1} {2}".format(i+1, files_to_scan[i], ref_tag)
+  print ""
+
   # Compare all the files, printing out the diff results of each comparison
   diff_results = {}
   for filename in files_to_scan:
@@ -244,6 +275,9 @@ def go(folder, tag, files_to_scan, loose=False, itr=False):
             sorted_results.append((ratio_inv, user2, user1))
             total_ratio += ratio_inv
       
+      if len(sorted_results) == 0:
+        print "\n+++ERROR: No found results for: {0}\n".format(filename)
+        continue
       
       # Sort and tally some results
       sorted_results.sort(reverse = True)
@@ -282,7 +316,7 @@ def go(folder, tag, files_to_scan, loose=False, itr=False):
           n_avg, avg_ratio, max_ratio)
       print "\tDev: [{0:.4f} | {1:.4f}]\tMin: {2:.4f} ".format(\
           n_std_dev, std_dev, min_ratio)
-      print "\n\n"
+      print "\n"
 
   # Set the global and return
   global latest_results
@@ -351,15 +385,49 @@ def output_to_csv(filename=None, results=None):
 ##################################
 
 if (len(sys.argv) < 4):
-  print "python heuristic_scan.py folder tag [file1, file2 ...]"
-  print "i.e. python heuristic_scan.py files cs24mid qsort/ip_qsort.s"
+  print "python heuristic_scan.py --folder --tag --fuzzy --itr --noref [file1, file2 ...]"
+  print "i.e. python heuristic_scan.py --folder files --tag cs24mid qsort/ip_qsort.s"
+  print "\nThe flags --fuzzy --itr --noref are optional, and --tag is optional as well."
+  print "If no tag is given, the tag will be the same as the folder."
+  print "Any strings at the end of the command are assumed to be the files to scan."
+  print "\n"
+  print "If running from the python shell, execute the command:"
+  print "\theuristic_scan.go(folder, tag, files, fuzzy, itr, useref)"
 else:
-  # TODO: make this not as janky
-  folder = sys.argv[1]
-  tag = sys.argv[2]
-  files = sys.argv[3:]
+  folder = None 
+  tag = None 
+  fuzzy = False
+  itr = False
+  ref = True
 
-  # loose sets 'fuzzy' matching
-  # itr   sets iterative matching 
-  results = go(folder, tag, files, loose=False, itr=True)
+  i = 1
+  while i < len(sys.argv):
+    if sys.argv[i] == '--folder':
+      folder = sys.argv[i+1]
+      i += 1
+    elif sys.argv[i] == '--tag':
+      tag = sys.argv[i+1]
+      i += 1
+    elif sys.argv[i] == '--fuzzy':
+      fuzzy = True
+    elif sys.argv[i] == '--itr':
+      itr = True
+    elif sys.argv[i] == '--noref':
+      ref = False 
+    else:
+      break
+    i += 1
+
+  files = sys.argv[i:]
+
+  if folder == None or len(files) == 0: 
+    print "ERROR: no folder or files given"
+    exit()
+  
+  if tag == None:
+    tag = folder
+
+  # fuzzy sets 'fuzzy' matching
+  # itr   sets 'iterative' matching 
+  results = go(folder, tag, files, fuzzy, itr, ref)
 
