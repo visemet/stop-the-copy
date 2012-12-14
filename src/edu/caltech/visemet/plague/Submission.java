@@ -3,8 +3,6 @@ package edu.caltech.visemet.plague;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
-import java.io.FileReader;
-import java.io.InputStreamReader;
 
 /**
  *
