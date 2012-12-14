@@ -1,6 +1,10 @@
 package edu.caltech.visemet.plague;
 
 import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.io.FileReader;
+import java.io.InputStreamReader;
 
 /**
  *
@@ -27,5 +31,17 @@ public class Submission {
     public Submission(int id, File file) {
         this.id = id;
         this.file = file;
+    }
+
+    /**
+     * Returns this submission represented as a file input stream.
+     *
+     * @return a file input stream of this submission
+     *
+     * @throws FileNotFoundException if the previously specified file does not
+     * exist
+     */
+    public FileInputStream asStream() throws FileNotFoundException {
+        return new FileInputStream(file);
     }
 }
