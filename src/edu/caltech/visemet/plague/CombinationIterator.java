@@ -21,7 +21,7 @@ public class CombinationIterator<T> implements Iterator<List<T>> {
             indexes[index] = index;
         }
 
-        this.choices = ImmutableList.copyOf(choices);
+        this.choices = ImmutableList.<T>copyOf(choices);
     }
 
     @Override
