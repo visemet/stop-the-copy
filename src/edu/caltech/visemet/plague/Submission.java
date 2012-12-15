@@ -3,6 +3,7 @@ package edu.caltech.visemet.plague;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
+import java.util.Objects;
 
 /**
  *
@@ -26,7 +27,7 @@ public class Submission {
      * @param id the identifier for this submission
      * @param file the file of this submission
      */
-    public Submission(int id, File file) {
+    public Submission(final int id, final File file) {
         this.id = id;
         this.file = file;
     }
@@ -41,5 +42,48 @@ public class Submission {
      */
     public FileInputStream asStream() throws FileNotFoundException {
         return new FileInputStream(file);
+    }
+
+    @Override
+    public int hashCode() {
+        int hash = 5;
+
+        hash = 83 * hash + this.id;
+        hash = 83 * hash + Objects.hashCode(this.file);
+
+        return hash;
+    }
+
+    @Override
+    public boolean equals(final Object obj) {
+        if (obj == null) {
+            return false;
+        } else if (getClass() != obj.getClass()) {
+            return false;
+        }
+
+        final Submission other = (Submission) obj;
+
+        if (this.id != other.id) {
+            return false;
+        } else if (!Objects.equals(this.file, other.file)) {
+            return false;
+        }
+
+        return true;
+    }
+
+    @Override
+    public String toString() {
+        final StringBuilder sb = new StringBuilder();
+
+        sb.append("Submission[");
+
+        sb.append("id=").append(id);
+        sb.append(", file=").append(file);
+
+        sb.append("]");
+
+        return sb.toString();
     }
 }
