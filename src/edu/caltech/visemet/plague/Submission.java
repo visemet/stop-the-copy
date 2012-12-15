@@ -80,7 +80,7 @@ public class Submission {
         sb.append("Submission[");
 
         sb.append("id=").append(id);
-        sb.append(", file=").append(file);
+        sb.append(", file=").append(file.getName());
 
         sb.append("]");
 
