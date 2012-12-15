@@ -42,6 +42,28 @@ public class DirectoryScanner {
     }
 
     /**
+     * Returns a nicely formatted string representation of the specified list
+     * of filenames.
+     *
+     * @param subdirectories the list of filenames to display
+     *
+     * @return prettified version of the specified list of filenames
+     */
+    private static String prettify(final List<String> filenames) {
+        final StringBuilder sb = new StringBuilder();
+
+        sb.append("{");
+
+        for (String filename : filenames) {
+            sb.append(" ").append(filename).append(" ");
+        }
+
+        sb.append("}");
+
+        return sb.toString();
+    }
+
+    /**
      * Holds the directory in which to scan.
      */
     private final File directory;
@@ -88,6 +110,10 @@ public class DirectoryScanner {
      * for a given filename
      */
     public List<Assignment> scan() {
+        LOGGER.info(
+                "Search for files {} in subdirectories of {}",
+                prettify(filenames), directory.getName());
+
         File[] subdirectories = directory.listFiles();
 
         if (subdirectories == null) {
