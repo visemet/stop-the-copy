@@ -24,6 +24,10 @@ public class Assignment implements Iterable<List<Submission>> {
         this.filename = filename;
     }
 
+    public String getFilename() {
+        return filename;
+    }
+
     public void attach(Submission submission) {
         submissions.add(submission);
     }
