@@ -1,10 +1,12 @@
 package edu.caltech.visemet.plague.comparators;
 
+import edu.caltech.visemet.plague.CombinationIterator;
 import edu.caltech.visemet.plague.Submission;
 import edu.caltech.visemet.plague.SubmissionComparator;
 import java.io.BufferedInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.util.Iterator;
 import java.util.List;
 
 /**
@@ -45,10 +47,71 @@ public class ByteComparator implements SubmissionComparator {
     }
 
     @Override
-    public double compare(List<Submission> submissions)
+    public double compare(List<Submission> submissions, Aggregate aggregate)
             throws FileNotFoundException, IOException {
 
-        throw new UnsupportedOperationException("Not supported yet.");
-    }
+        Iterator<List<Submission>> iterator =
+                new CombinationIterator<>(PAIR, submissions);
 
+        double result = -1;
+
+        double sum = result;
+        int count = 0;
+
+        double max = result;
+
+        double min = result;
+
+        switch (aggregate) {
+        case AVERAGE:
+            while (iterator.hasNext()) {
+                List<Submission> next = iterator.next();
+
+                Submission aSubmission = next.get(0);
+                Submission anotherSubmission = next.get(1);
+
+                double value = compare(aSubmission, anotherSubmission);
+
+                sum += value;
+                count++;
+            }
+
+            result = count == -1 ? result : (sum / count);
+            break;
+        case MAXIMUM:
+            while (iterator.hasNext()) {
+                List<Submission> next = iterator.next();
+
+                Submission aSubmission = next.get(0);
+                Submission anotherSubmission = next.get(1);
+
+                double value = compare(aSubmission, anotherSubmission);
+
+                if (max == -1 || value > max) {
+                    max = value;
+                }
+            }
+
+            result = max;
+            break;
+        case MINIMUM:
+            while (iterator.hasNext()) {
+                List<Submission> next = iterator.next();
+
+                Submission aSubmission = next.get(0);
+                Submission anotherSubmission = next.get(1);
+
+                double value = compare(aSubmission, anotherSubmission);
+
+                if (min == -1 || value < min) {
+                    min = value;
+                }
+            }
+
+            result = min;
+            break;
+        }
+
+        return result;
+    }
 }
